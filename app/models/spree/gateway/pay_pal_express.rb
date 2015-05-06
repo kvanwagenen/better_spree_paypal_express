@@ -99,6 +99,37 @@ module Spree
       end
       refund_transaction_response
     end
+
+    # Called when order is canceled or credited through the admin interface
+    def credit(credit_cents, response_code, gateway_options)
+
+      # Get payment by grabbing identifier from order id
+      payment = Spree::Payment.find_by_identifier(gateway_options[:order_id].split('-').last)
+      
+      # Convert credit amount to float
+      amount = (credit_cents * 0.01).round(2)
+
+      # If told to credit 0, credit the full amount instead
+      if amount == 0
+        amount = payment.amount.to_f
+      end
+
+      # Process the refund
+      refund_response = refund(payment, amount)
+      response = OpenStruct.new({:success? => refund_response.success?})
+      response.instance_eval do
+        def set_message(message)
+          @message = message
+        end
+        def to_s
+          @message.nil? ? "Error refunding paypal transaction" : @message 
+        end
+      end
+      unless refund_response.success?
+        response.set_message(refund_response.errors.first.long_message)
+      end
+      response
+    end
   end
 end
 
