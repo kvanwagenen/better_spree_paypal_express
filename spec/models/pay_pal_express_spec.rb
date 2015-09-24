@@ -1,19 +1,18 @@
 describe Spree::Gateway::PayPalExpress do
   let(:gateway) { Spree::Gateway::PayPalExpress.create!(name: "PayPalExpress") }
+  let(:payment) do
+    payment = FactoryGirl.create(:payment, :payment_method => gateway, :amount => 10)
+    payment.stub :source => mock_model(Spree::PaypalExpressCheckout, :token => 'fake_token', :payer_id => 'fake_payer_id', :update_column => true)
+    payment
+  end
+
+  let(:provider) do
+    provider = double('Provider')
+    gateway.stub(:provider => provider)
+    provider
+  end
 
   context "payment purchase" do
-    let(:payment) do
-      payment = FactoryGirl.create(:payment, :payment_method => gateway, :amount => 10)
-      payment.stub :source => mock_model(Spree::PaypalExpressCheckout, :token => 'fake_token', :payer_id => 'fake_payer_id', :update_column => true)
-      payment
-    end
-
-    let(:provider) do
-      provider = double('Provider')
-      gateway.stub(:provider => provider)
-      provider
-    end
-
     before do
       provider.should_receive(:build_get_express_checkout_details).with({
         :Token => 'fake_token'
@@ -55,6 +54,31 @@ describe Spree::Gateway::PayPalExpress do
                           :errors => [double('pp_response_error', :long_message => "An error goes here.")])
       provider.should_receive(:do_express_checkout_payment).and_return(response)
       lambda { payment.purchase! }.should raise_error(Spree::Core::GatewayError, "An error goes here.")
+    end
+    
+  end
+  
+  context '#credit' do
+    let(:payment){create(:payment, :payment_method => gateway, :amount => 10)}
+    let(:source){create(:paypal_express_checkout)}
+    let(:credit){gateway.credit(amount, payment.source, payment.transaction_id, {originator: nil})}
+    let(:amount){payment.amount * 100}
+    before do
+      payment.source = source
+      payment.save
+    end
+    it 'doesn\'t raise an error' do
+      expect(credit).not_to raise_error
+    end
+    it 'calls #refund with payment and the correct amount' do
+      expect(gateway).to receive(:refund).with(payment, amount / 100)
+      credit
+    end
+  end
+   
+  context '#payment_profiles_supported?' do
+    it 'returns true' do
+      expect(gateway.payment_profiles_supported?).to eq(true)
     end
   end
 end

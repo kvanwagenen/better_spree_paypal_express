@@ -16,6 +16,14 @@ module Spree
     def provider_class
       ::PayPal::SDK::Merchant::API
     end
+    
+    def payment_profiles_supported?
+      true
+    end
+    
+    def create_profile(payment, options = {})
+      # Do nothing
+    end
 
     def provider
       ::PayPal::SDK.configure(
@@ -101,10 +109,11 @@ module Spree
     end
 
     # Called when order is canceled or credited through the admin interface
-    def credit(credit_cents, response_code, gateway_options)
+    def credit(credit_cents, source, transaction_id, options)
 
       # Get payment by grabbing identifier from order id
-      payment = Spree::Payment.find_by_identifier(gateway_options[:order_id].split('-').last)
+      payment = Spree::Payment.where(source_type: source.class.to_s, source_id: source.id).try(:first)
+      return if !payment
       
       # Convert credit amount to float
       amount = (credit_cents * 0.01).round(2)
@@ -116,7 +125,7 @@ module Spree
 
       # Process the refund
       refund_response = refund(payment, amount)
-      response = OpenStruct.new({:success? => refund_response.success?})
+      response = OpenStruct.new({:success? => refund_response.try(:success?)})
       response.instance_eval do
         def set_message(message)
           @message = message
@@ -125,8 +134,8 @@ module Spree
           @message.nil? ? "Error refunding paypal transaction" : @message 
         end
       end
-      unless refund_response.success?
-        response.set_message(refund_response.errors.first.long_message)
+      unless refund_response.try(:success?)
+        response.set_message(refund_response.try(:errors).try(:first).try(:long_message))
       end
       response
     end

@@ -37,6 +37,7 @@ Capybara.javascript_driver = :poltergeist
 Capybara.default_wait_time = 15
 
 Dir[File.join(File.dirname(__FILE__), 'support/**/*.rb')].each { |f| require f }
+Dir[File.join(File.dirname(__FILE__), 'factories/**/*.rb')].each { |f| require f }
 
 require 'spree/testing_support/factories'
 require 'spree/testing_support/controller_requests'
